@@ -1,101 +1,23 @@
-repeat task.wait() until game:IsLoaded()
+local TweenService = game:GetService("TweenService")
 
-local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
-local VIM = game:GetService("VirtualInputManager")
-local RunService = game:GetService("RunService")
-
-local player = Players.LocalPlayer
-
-local questData = {
-    {Level = 1, NPC = "Luffy", Mob = "Bandit", Pos = Vector3.new(-10, 15, 20)},
-    {Level = 30, NPC = "Marine", Mob = "Marine Recruit", Pos = Vector3.new(1300, 20, -650)},
-    {Level = 100, NPC = "Buggy NPC", Mob = "Orange Bandit", Pos = Vector3.new(-1700, 25, 2150)},
-    {Level = 200, NPC = "Monkey NPC", Mob = "Monkey", Pos = Vector3.new(2450, 35, 1200)},
-    {Level = 350, NPC = "Arlong NPC", Mob = "Fishman", Pos = Vector3.new(4100, 20, -3200)},
-    {Level = 500, NPC = "Chef NPC", Mob = "Dark Cook", Pos = Vector3.new(-3600, 20, -1600)},
-    {Level = 750, NPC = "Vivi", Mob = "Desert Bandit", Pos = Vector3.new(5100, 25, -4600)},
-    {Level = 1000, NPC = "Sky Guard NPC", Mob = "God Guard", Pos = Vector3.new(100, 5050, -50)}
-}
-
-local char, hrp, humanoid
-local function setup()
-    char = player.Character or player.CharacterAdded:Wait()
-    hrp = char:WaitForChild("HumanoidRootPart")
-    humanoid = char:WaitForChild("Humanoid")
-end
-setup()
-player.CharacterAdded:Connect(setup)
-
-local autoFarm = true
-local targetMob = nil
-
-local function getMyLevel()
-    local stats = player:FindFirstChild("leaderstats") or player:FindFirstChild("Data")
-    if stats and stats:FindFirstChild("Level") then
-        return stats.Level.Value
-    end
-    return 1
+-- HÀM BAY AN TOÀN (Thay thế cho CFrame trực tiếp)
+local function toPos(targetCFrame)
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    local speed = 100 -- Tốc độ bay (chỉnh cao hơn nếu muốn nhanh, nhưng dễ bị ban)
+    local info = TweenInfo.new(distance / speed, Enum.EasingStyle.Linear)
+    
+    local tween = TweenService:Create(hrp, info, {CFrame = targetCFrame})
+    tween:Play()
+    return tween
 end
 
-local function hasQuest()
-    local questFolder = player:FindFirstChild("Quests") or player:FindFirstChild("Data")
-    local currentQuest = questFolder and (questFolder:FindFirstChild("CurrentQuest") or questFolder:FindFirstChild("Quest"))
-    if currentQuest and currentQuest.Value ~= "" and currentQuest.Value ~= "None" then
-        return true
-    end
-    return false
-end
-
-local function getMob(name)
-    local nearest, dist = nil, 1000
-    for _, v in ipairs(workspace:GetChildren()) do
-        if v.Name == name and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-            local root = v:FindFirstChild("HumanoidRootPart")
-            if root then
-                local d = (hrp.Position - root.Position).Magnitude
-                if d < dist then
-                    dist = d
-                    nearest = v
-                end
-            end
-        end
-    end
-    return nearest
-end
-
-RunService.Stepped:Connect(function()
-    if autoFarm and targetMob and targetMob:FindFirstChild("HumanoidRootPart") then
-        local mhrp = targetMob.HumanoidRootPart
-        hrp.Velocity = Vector3.new(0,0,0)
-        hrp.CFrame = CFrame.lookAt(mhrp.Position - (mhrp.CFrame.LookVector * 3.5) + Vector3.new(0, 2, 0), mhrp.Position)
-        
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = false
-            end
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if autoFarm and targetMob then
-            VIM:SendMouseButtonEvent(0,0,0,true,game,0)
-            task.wait(0.01)
-            VIM:SendMouseButtonEvent(0,0,0,false,game,0)
-            task.wait(0.07)
-        else
-            task.wait(0.5)
-        end
-    end
-end)
-
+-- Sửa lại logic trong Main Loop
 task.spawn(function()
     while task.wait(0.5) do
         if autoFarm then
             local level = getMyLevel()
             local info = questData[1]
+            
             for _, v in ipairs(questData) do
                 if level >= v.Level then info = v end
             end
@@ -104,18 +26,23 @@ task.spawn(function()
                 targetMob = nil
                 local npc = workspace:FindFirstChild(info.NPC, true)
                 if npc and npc:FindFirstChild("HumanoidRootPart") then
-                    hrp.CFrame = npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                    -- Bay tới NPC
+                    local tween = toPos(npc.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3))
+                    tween.Completed:Wait() -- Đợi bay tới nơi mới bấm
+                    
                     task.wait(0.2)
                     VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
                     task.wait(0.1)
                     VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                    -- LƯU Ý: Nếu game hiện bảng UI, bạn cần thêm code click nút Accept ở đây
                 end
             else
-                if not targetMob or not targetMob:Parent or targetMob.Humanoid.Health <= 0 then
-                    targetMob = getMob(info.Mob)
-                    if not targetMob then
-                        hrp.CFrame = CFrame.new(info.Pos)
-                    end
+                -- Đã có Quest
+                targetMob = getMob(info.Mob)
+                
+                if not targetMob then
+                    -- Nếu không thấy quái, bay tới bãi quái (đã cộng thêm độ cao để tránh kẹt đất)
+                    toPos(CFrame.new(info.Pos + Vector3.new(0, 20, 0)))
                 end
             end
         end
