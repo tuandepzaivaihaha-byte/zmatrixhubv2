@@ -18,74 +18,67 @@ player.CharacterAdded:Connect(setup)
 local autoFarm = true
 local targetMob = nil
 
-------------------------------------------------
--- TÌM MOB
-------------------------------------------------
+-- Hàm tìm quái thông minh hơn (Tránh quét toàn bộ workspace)
 local function getMob()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        if v:FindFirstChild("Humanoid") 
-        and v:FindFirstChild("HumanoidRootPart") 
-        and v.Humanoid.Health > 0 then
-            return v
+    local nearest = nil
+    local dist = math.huge
+    
+    -- Thay vì GetDescendants, hãy tìm trong folder chứa quái nếu biết tên
+    -- Ở đây tôi dùng GetChildren để giảm tải
+    for _, v in ipairs(workspace:GetChildren()) do
+        if v:IsA("Model") and v:FindFirstChild("Humanoid") and v:FindFirstChild("HumanoidRootPart") then
+            if v.Humanoid.Health > 0 then
+                -- Bạn có thể thêm điều kiện v.Name == "Tên Quái" ở đây
+                local d = (hrp.Position - v.HumanoidRootPart.Position).Magnitude
+                if d < dist then
+                    dist = d
+                    nearest = v
+                end
+            end
         end
     end
+    return nearest
 end
 
-------------------------------------------------
--- NOCLIP + LOCK
-------------------------------------------------
+-- Noclip & Di chuyển (Heartbeat mượt hơn Stepped)
 RunService.Heartbeat:Connect(function()
-    if autoFarm and targetMob 
-    and targetMob:FindFirstChild("HumanoidRootPart") then
-
-        local mhrp = targetMob.HumanoidRootPart
-
-        -- noclip
+    if autoFarm and targetMob and targetMob:FindFirstChild("HumanoidRootPart") then
+        -- Noclip
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-
-        -- đứng trên đầu mob
-        hrp.CFrame = mhrp.CFrame * CFrame.new(0,5,0)
+        -- Giữ khoảng cách trên đầu quái 5 studs
+        hrp.Velocity = Vector3.new(0,0,0)
+        hrp.CFrame = targetMob.HumanoidRootPart.CFrame * CFrame.new(0, 5, 0)
     end
 end)
 
-------------------------------------------------
--- AUTO CLICK
-------------------------------------------------
+-- Auto Click & Equip Tool
 task.spawn(function()
     while true do
         task.wait(0.1)
-
-        if autoFarm and targetMob 
-        and targetMob:FindFirstChild("Humanoid") then
-
-            -- equip tool
-            local tool = player.Backpack:FindFirstChildOfClass("Tool")
-            if tool then
+        if autoFarm and targetMob and targetMob:FindFirstChild("Humanoid") then
+            -- Tự cầm vũ khí
+            local tool = player.Backpack:FindFirstChildOfClass("Tool") or char:FindFirstChildOfClass("Tool")
+            if tool and not char:FindFirstChild(tool.Name) then
                 humanoid:EquipTool(tool)
             end
 
-            -- click
-            VIM:SendMouseButtonEvent(0,0,0,true,game,0)
-            task.wait(0.02)
-            VIM:SendMouseButtonEvent(0,0,0,false,game,0)
+            -- Click tấn công
+            VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            task.wait(0.05)
+            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
         end
     end
 end)
 
-------------------------------------------------
--- MAIN LOOP
-------------------------------------------------
+-- Main Loop: Tìm mục tiêu
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(1) do
         if autoFarm then
-            if not targetMob 
-            or not targetMob.Parent 
-            or targetMob.Humanoid.Health <= 0 then
-
+            if not targetMob or not targetMob.Parent or not targetMob:FindFirstChild("Humanoid") or targetMob.Humanoid.Health <= 0 then
                 targetMob = getMob()
             end
         end
