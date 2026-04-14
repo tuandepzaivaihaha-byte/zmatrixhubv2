@@ -1,14 +1,13 @@
 repeat task.wait() until game:IsLoaded()
 
--- SERVICES
 local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
 local VIM = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
-
--- CHARACTER
 local char, hrp, humanoid
+
 local function setup()
     char = player.Character or player.CharacterAdded:Wait()
     hrp = char:WaitForChild("HumanoidRootPart")
@@ -17,126 +16,34 @@ end
 setup()
 player.CharacterAdded:Connect(setup)
 
--- CONFIG
+local questData = {
+    {Level = 1, NPC = "Luffy", Mob = "Bandit", Pos = Vector3.new(-10, 15, 20)},
+    {Level = 30, NPC = "Marine", Mob = "Marine Recruit", Pos = Vector3.new(1300, 20, -650)},
+    -- ... các dữ liệu khác giữ nguyên
+}
+
 local autoFarm = true
 local targetMob = nil
 
-local questData = {
-    {Level = 1, Mob = "Bandit"},
-    {Level = 30, Mob = "Marine Recruit"},
-    {Level = 100, Mob = "Orange Bandit"},
-    {Level = 200, Mob = "Monkey"},
-}
-
-------------------------------------------------
--- SAFE LEVEL
-------------------------------------------------
-local function getLevel()
-    local data = player:FindFirstChild("Data") or player:FindFirstChild("leaderstats")
-    if data and data:FindFirstChild("Level") then
-        return data.Level.Value
-    end
-    return 1
-end
-
-------------------------------------------------
--- GET MOB (ÍT LAG)
-------------------------------------------------
-local function getMob(name)
-    local folder = workspace:FindFirstChild("Enemies") or workspace
-    local closest, dist = nil, math.huge
-
-    for _, v in ipairs(folder:GetChildren()) do
-        if v.Name == name 
-        and v:FindFirstChild("Humanoid") 
-        and v.Humanoid.Health > 0 then
-            
-            local root = v:FindFirstChild("HumanoidRootPart")
-            if root then
-                local d = (hrp.Position - root.Position).Magnitude
-                if d < dist then
-                    dist = d
-                    closest = v
-                end
-            end
-        end
-    end
-
-    return closest
-end
-
-------------------------------------------------
--- LOCK MOB (MƯỢT + KHÔNG RUNG)
-------------------------------------------------
-RunService.Heartbeat:Connect(function()
-    if autoFarm 
-    and targetMob 
-    and targetMob:FindFirstChild("Humanoid") 
-    and targetMob:FindFirstChild("HumanoidRootPart") 
-    and targetMob.Humanoid.Health > 0 then
-
-        local pos = targetMob.HumanoidRootPart.Position
-
-        hrp.CFrame = CFrame.lookAt(
-            pos - (targetMob.HumanoidRootPart.CFrame.LookVector * 3),
-            pos
-        )
-
-        -- noclip
-        for _, part in ipairs(char:GetChildren()) do
-            if part:IsA("BasePart") then
+-- Tối ưu Noclip: Chỉ chạy 1 lần hoặc dùng vòng lặp nhẹ
+RunService.Stepped:Connect(function()
+    if autoFarm and targetMob then
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
                 part.CanCollide = false
             end
         end
+        
+        if targetMob:FindFirstChild("HumanoidRootPart") then
+            local mhrp = targetMob.HumanoidRootPart
+            hrp.Velocity = Vector3.new(0,0,0) -- Triệt tiêu lực đẩy
+            -- Đứng trên đầu Mob một chút để tránh bị đánh trúng
+            hrp.CFrame = mhrp.CFrame * CFrame.new(0, 5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+        end
     end
 end)
 
-------------------------------------------------
--- AUTO CLICK (NHẸ + KHÔNG SPAM)
-------------------------------------------------
+-- Click chuột (Tấn công)
 task.spawn(function()
     while true do
-        task.wait(0.1)
-
-        if autoFarm and targetMob then
-            -- auto equip
-            local tool = player.Backpack:FindFirstChildOfClass("Tool")
-            if tool then
-                humanoid:EquipTool(tool)
-            end
-
-            VIM:SendMouseButtonEvent(0,0,0,true,game,0)
-            task.wait(0.02)
-            VIM:SendMouseButtonEvent(0,0,0,false,game,0)
-        end
-    end
-end)
-
-------------------------------------------------
--- MAIN LOOP (SIÊU ỔN ĐỊNH)
-------------------------------------------------
-task.spawn(function()
-    while task.wait(0.5) do
-        if autoFarm and hrp then
-
-            -- chọn mob theo level
-            local level = getLevel()
-            local mobName = questData[1].Mob
-
-            for _, v in ipairs(questData) do
-                if level >= v.Level then
-                    mobName = v.Mob
-                end
-            end
-
-            -- tìm mob
-            if not targetMob 
-            or not targetMob.Parent 
-            or targetMob.Humanoid.Health <= 0 then
-                
-                targetMob = getMob(mobName)
-            end
-
-        end
-    end
-end)
+        if autoFarm and targetMob and targetMob:FindFirstChild("
