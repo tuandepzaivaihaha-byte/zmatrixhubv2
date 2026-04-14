@@ -1,7 +1,6 @@
 repeat task.wait() until game:IsLoaded()
 
 local Players = game:GetService("Players")
-local UIS = game:GetService("UserInputService")
 local VIM = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
 
@@ -16,34 +15,79 @@ end
 setup()
 player.CharacterAdded:Connect(setup)
 
-local questData = {
-    {Level = 1, NPC = "Luffy", Mob = "Bandit", Pos = Vector3.new(-10, 15, 20)},
-    {Level = 30, NPC = "Marine", Mob = "Marine Recruit", Pos = Vector3.new(1300, 20, -650)},
-    -- ... các dữ liệu khác giữ nguyên
-}
-
 local autoFarm = true
 local targetMob = nil
 
--- Tối ưu Noclip: Chỉ chạy 1 lần hoặc dùng vòng lặp nhẹ
-RunService.Stepped:Connect(function()
-    if autoFarm and targetMob then
+------------------------------------------------
+-- TÌM MOB
+------------------------------------------------
+local function getMob()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:FindFirstChild("Humanoid") 
+        and v:FindFirstChild("HumanoidRootPart") 
+        and v.Humanoid.Health > 0 then
+            return v
+        end
+    end
+end
+
+------------------------------------------------
+-- NOCLIP + LOCK
+------------------------------------------------
+RunService.Heartbeat:Connect(function()
+    if autoFarm and targetMob 
+    and targetMob:FindFirstChild("HumanoidRootPart") then
+
+        local mhrp = targetMob.HumanoidRootPart
+
+        -- noclip
         for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
+            if part:IsA("BasePart") then
                 part.CanCollide = false
             end
         end
-        
-        if targetMob:FindFirstChild("HumanoidRootPart") then
-            local mhrp = targetMob.HumanoidRootPart
-            hrp.Velocity = Vector3.new(0,0,0) -- Triệt tiêu lực đẩy
-            -- Đứng trên đầu Mob một chút để tránh bị đánh trúng
-            hrp.CFrame = mhrp.CFrame * CFrame.new(0, 5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+
+        -- đứng trên đầu mob
+        hrp.CFrame = mhrp.CFrame * CFrame.new(0,5,0)
+    end
+end)
+
+------------------------------------------------
+-- AUTO CLICK
+------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+
+        if autoFarm and targetMob 
+        and targetMob:FindFirstChild("Humanoid") then
+
+            -- equip tool
+            local tool = player.Backpack:FindFirstChildOfClass("Tool")
+            if tool then
+                humanoid:EquipTool(tool)
+            end
+
+            -- click
+            VIM:SendMouseButtonEvent(0,0,0,true,game,0)
+            task.wait(0.02)
+            VIM:SendMouseButtonEvent(0,0,0,false,game,0)
         end
     end
 end)
 
--- Click chuột (Tấn công)
+------------------------------------------------
+-- MAIN LOOP
+------------------------------------------------
 task.spawn(function()
-    while true do
-        if autoFarm and targetMob and targetMob:FindFirstChild("
+    while task.wait(0.5) do
+        if autoFarm then
+            if not targetMob 
+            or not targetMob.Parent 
+            or targetMob.Humanoid.Health <= 0 then
+
+                targetMob = getMob()
+            end
+        end
+    end
+end)
